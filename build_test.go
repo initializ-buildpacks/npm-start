@@ -94,7 +94,7 @@ func testBuild(t *testing.T, context spec.G, it spec.S) {
 			Args:    []string{startScript},
 		}))
 
-		Expect(startScript).To(matchers.BeAFileWithSubstring("some-prestart-command && some-start-command && some-poststart-command"))
+		Expect(startScript).To(matchers.BeAFileWithSubstring("some-prestart-command && some-start-command $@ && some-poststart-command"))
 
 		Expect(buffer.String()).To(ContainSubstring("Some Buildpack some-version"))
 		Expect(buffer.String()).To(ContainSubstring("Assigning launch processes:"))
@@ -142,7 +142,7 @@ func testBuild(t *testing.T, context spec.G, it spec.S) {
 				Command: "NonReloadable",
 			}))
 
-			Expect(startScript).To(matchers.BeAFileWithSubstring("some-prestart-command && some-start-command && some-poststart-command"))
+			Expect(startScript).To(matchers.BeAFileWithSubstring("some-prestart-command && some-start-command $@ && some-poststart-command"))
 
 		})
 	})
@@ -176,7 +176,7 @@ func testBuild(t *testing.T, context spec.G, it spec.S) {
 				Args:    []string{startScript},
 			}))
 
-			Expect(startScript).To(matchers.BeAFileWithSubstring("some-start-command && some-poststart-command"))
+			Expect(startScript).To(matchers.BeAFileWithSubstring("some-start-command $@ && some-poststart-command"))
 		})
 	})
 
@@ -209,7 +209,7 @@ func testBuild(t *testing.T, context spec.G, it spec.S) {
 				Args:    []string{startScript},
 			}))
 
-			Expect(startScript).To(matchers.BeAFileWithSubstring("some-prestart-command && some-start-command"))
+			Expect(startScript).To(matchers.BeAFileWithSubstring("some-prestart-command && some-start-command $@"))
 		})
 	})
 
@@ -221,7 +221,8 @@ func testBuild(t *testing.T, context spec.G, it spec.S) {
 				"scripts": {
 					"prestart": "some-prestart-command",
 					"start": "some-start-command",
-					"poststart": "some-poststart-command"
+					"poststart": "some-poststart-command",
+					"random-script": "a-different-start-command"
 				}
 			}`), 0600)
 			Expect(err).NotTo(HaveOccurred())
@@ -251,7 +252,34 @@ func testBuild(t *testing.T, context spec.G, it spec.S) {
 				Args:    []string{startScript},
 			}))
 
-			Expect(startScript).To(matchers.BeAFileWithSubstring("some-prestart-command && some-start-command && some-poststart-command"))
+			Expect(startScript).To(matchers.BeAFileWithSubstring("some-prestart-command && some-start-command $@ && some-poststart-command"))
+		})
+
+		context("when BP_NMP_START_SCRIPT is used", func() {
+			it.Before(func() {
+				t.Setenv("BP_NPM_START_SCRIPT", "random-script")
+			})
+
+			it("returns a result with a valid start command when BP_NPM_START_SCRIPT is used", func() {
+				result, err := build(buildContext)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(result.Plan).To(Equal(
+					packit.BuildpackPlan{
+						Entries: []packit.BuildpackPlanEntry{},
+					},
+				))
+
+				Expect(result.Launch.Processes).To(ConsistOf(packit.Process{
+					Type:    "web",
+					Command: "sh",
+					Default: true,
+					Direct:  true,
+					Args:    []string{startScript},
+				}))
+
+				Expect(startScript).To(matchers.BeAFileWithSubstring("some-prestart-command && a-different-start-command $@ && some-poststart-command"))
+			})
 		})
 	})
 
